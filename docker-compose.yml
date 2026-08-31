@@ -1,0 +1,15 @@
+name: de-takehome
+
+# One container. Spark in local mode, reading and writing plain files on the
+# mounted volume. No object store, no catalog service, nothing to wait for.
+services:
+  spark:
+    build: .
+    environment:
+      PYTHONPATH: /work
+    volumes:
+      - .:/work
+    working_dir: /work
+    ports:
+      - "4040:4040"   # Spark UI while a job is running
+    entrypoint: ["sleep", "infinity"]

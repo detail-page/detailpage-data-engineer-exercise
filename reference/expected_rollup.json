@@ -1,0 +1,12 @@
+{
+  "column_sums": {
+    "distinct_items": 3948104,
+    "ordered_revenue_cents": 2410385425966,
+    "page_views": 12959957455,
+    "sessions": 7973978224,
+    "units_ordered": 357125123
+  },
+  "ordered_digest": "e62f96f43ec1d7601c9f94ecfbcbe7e0",
+  "revenue_per_session_sum": 1450895.1899,
+  "row_count": 4800
+}
