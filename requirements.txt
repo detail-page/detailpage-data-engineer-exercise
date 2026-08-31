@@ -1,2 +1,11 @@
+# Installed in the image, not here -- see Dockerfile. This file exists so the
+# versions are visible without reading the Dockerfile.
+#
+# pytest is pinned to 8.3.3 deliberately. The apache/spark:3.5.3 base image
+# ships Python 3.8.10, and pytest 9.x requires >=3.9. Dependabot flags 8.3.3
+# for CVE-class "vulnerable tmpdir handling" (moderate) -- not meaningfully
+# exploitable here: pytest runs only inside a throwaway local container over
+# synthetic data. Bumping it means changing Spark versions, which would
+# invalidate the committed Part A fingerprint.
 pyspark==3.5.3
 pytest==8.3.3
