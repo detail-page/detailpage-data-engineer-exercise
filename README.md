@@ -1,169 +1,137 @@
 # Data Engineer II — take-home exercise
 
-Three parts, about **three hours** total. Built from the role's actual first
-project: moving Redshift ETL onto files in S3 without breaking the API that
-reads from it.
+Three parts, roughly three hours. It's drawn from the first real project for
+this role: moving our Redshift ETL onto files in S3 without breaking the API
+that reads from it.
 
-Runs entirely in one Docker container on your laptop. **No AWS account, no
-cloud spend, no access requests, nothing to sign up for.**
-
-| | | |
-|---|---|---|
-| **Part A** | ~45 min | Make a slow Spark job fast. Correctness is checked automatically |
-| **Part B** | ~90 min | Design the migration: a diagram, six decisions, a SQL sketch |
-| **Part C** | ≤8 min | Record a Loom walking us through what you did and why |
+Everything runs in one Docker container locally. No AWS account, nothing to
+sign up for.
 
 ---
 
-## Ground rules
+## Before you start
 
-**Three hours.** If you run out, stop and write down what you'd have done
-next — that gets read. An honest "here's where I stopped" scores better than a
-rushed submission you never ran.
+**Use AI however you normally would** — Cursor, Claude Code, Copilot, any of
+it. We use these tools heavily and would find it odd if you didn't. The only
+thing we'd ask is that you can talk through your choices in Part C, because
+that conversation is the useful part for both of us.
 
-**Use AI freely.** Cursor, Claude Code, Copilot, whatever you normally use. We
-use these tools heavily ourselves and we'd think it strange if you didn't.
+**Part B has no correct answer.** Several of the decisions we ask about are
+ones we haven't settled internally. If you think our plan is wrong, say so —
+that's a more interesting submission than one that agrees with us.
 
-One condition, and it's the whole deal: **in your Loom, explain why you made
-each choice and what you rejected.** We don't care who typed it. We care
-whether you can defend it. A submission whose author can't explain a decision
-tells us less than one that's half-finished but understood.
-
-**Part B has no right answer.** Several of the decisions we ask about are ones
-we haven't settled internally. We'd rather hear you disagree with our plan for
-a good reason than agree with it for none.
+Three hours is our estimate of a reasonable effort, not a stopwatch. Spend
+what the problem's worth to you.
 
 ---
 
 ## Setup
 
-Docker with Compose. One container, roughly 2GB of image, about a minute of
-data generation.
+Docker with Compose. About a minute of data generation.
 
 ```bash
-make setup      # build, start, generate the dataset
-make rollup     # run the Part A job -- time your baseline
-make verify     # confirm the output is still correct
+make setup
+make rollup     # runs the Part A job
+make verify     # checks the output still matches
 ```
 
-`make help` lists everything. `make clean` removes it all.
+`make help` lists the rest. `make clean` tears it down.
 
-All data is synthetic, generated from a fixed seed in
-`scripts/generate_data.py`. Nothing here comes from production or from any
+The data is synthetic, generated from a fixed seed in
+`scripts/generate_data.py`. None of it comes from production or any
 marketplace API.
 
 ---
 
-## Part A — Make a slow job fast (~45 min)
+## Part A — Make a slow job fast
 
 `jobs/daily_rollup.py` produces a correct daily rollup of sessions, page
-views, units and revenue by date, category and tier. It is much slower than it
-needs to be.
+views, units and revenue by date, category and tier. It's a good deal slower
+than it needs to be, for several different reasons.
 
-Make it fast.
+Make it faster, and keep the output the same. `make verify` compares row
+counts, per-column sums and an ordered digest against a committed fingerprint,
+so you can check yourself as you go.
 
-- **Output must stay identical.** `make verify` checks the row count,
-  per-column sums, and an ordered digest against
-  `reference/expected_rollup.json`. If it fails, the submission fails —
-  speed without correctness is worth nothing.
-- **Record your own before/after times.** Absolute numbers depend on your
-  machine, so measure your baseline first. We're looking at the ratio and at
-  whether you can explain it.
-- For **each** change, a sentence or two on what was slow and why your fix
-  helps.
+Worth including in your notes: your before/after timings, and a line on each
+change explaining what was actually slow. The reasoning is what we read.
 
-There are seven distinct problems. **Five found with clear explanations beats
-seven found with none.**
+The Spark UI is on http://localhost:4040 while a job runs, and `.explain()`
+will show you the physical plan.
 
-The Spark UI is at http://localhost:4040 while a job runs. `.explain()` shows
-you the physical plan.
-
-> **Why we ask:** optimizing existing pipelines is the bulk of this job.
-> Diagnosing someone else's slow code matters more to us than authoring new
-> code from scratch.
+> **Why we ask:** most of this job is making existing pipelines faster.
+> Reading someone else's slow code is closer to the day-to-day than writing
+> new code from scratch.
 
 ---
 
-## Part B — Design the migration (~90 min)
+## Part B — Design the migration
 
-This is the part we weight most heavily.
+This is the part we're most interested in.
 
-The brief is in **[`DESIGN.md`](DESIGN.md)** — a real, unresolved problem:
-daily marketplace data that gets restated after the fact, an API that has to
-stay fast, and ETL currently fighting that API for the same cluster.
+The brief is in **[`DESIGN.md`](DESIGN.md)**: daily marketplace data that gets
+restated after the fact, an API with a tight latency budget, and ETL that
+currently competes with that API for the same cluster.
 
-You'll produce:
+We're after a diagram, a sense of where it breaks, how you'd sequence the
+migration without a hard cutover, and a SQL sketch for absorbing a restated
+record. Nothing needs to run.
 
-- **An architecture diagram.** Any tool. Commit it.
-- **Three failure modes annotated on it** — what breaks, how you'd know, what
-  a client sees at 7am while it's broken.
-- **A sequencing plan** to get there without a big-bang cutover.
-- **A SQL sketch** for absorbing a restated record. It does not need to run.
-- **Six decisions**, recorded in **[`DECISIONS.md`](DECISIONS.md)**.
+Six decisions go in **[`DECISIONS.md`](DECISIONS.md)** — the ones where we
+genuinely want to know what you'd pick and what you'd rule out.
 
-Run `make drops` to see what the daily data actually looks like. It's messy on
-purpose — restatements, late arrivals, duplicates, a column that appears
-partway through, and one marketplace carrying most of the volume. Design
-against what's there, not against a clean version of it.
+`make drops` shows what the daily data actually looks like. It's messy on
+purpose — restatements, late arrivals, duplicates, a column that turns up
+partway through, and one marketplace carrying most of the volume.
 
-No code has to run in Part B. No AWS, no Terraform, no deployment.
-
-> **Why we ask:** we're making this decision right now, and the reasoning
-> matters more than the diagram. This is also the part we can't train quickly.
+> **Why we ask:** we're making this call right now, and we'd rather hire
+> someone whose reasoning we can follow than someone who picked the same
+> tools we did.
 
 ---
 
-## Part C — Record a Loom (≤8 min)
+## Part C — Walk us through it
 
-Walk us through your submission. Screen share, talk over it.
+Record a short screen share — ten minutes is plenty. Talk through Part A,
+your diagram and a couple of the decisions you found hardest, and where you'd
+take it next.
 
-Cover:
+No need to script or re-record. We'd rather hear you think than watch a
+polished demo.
 
-1. **Part A** — what was slow, what you changed, your before/after numbers.
-2. **Your diagram** — the shape of it, and one failure mode you're worried
-   about.
-3. **Two of your six decisions** — your pick, ideally the two you found
-   hardest. Why this choice, what you rejected.
-4. **What you'd do with another week.**
-
-**Eight minutes is a cap, and keeping to it is part of what we're assessing.**
-Being able to explain a technical decision concisely to someone who wasn't
-there is most of this job. Don't script it or re-record for polish — we'd
-rather hear you think.
-
-Any recorder is fine (Loom, a plain screen recording, an unlisted YouTube
-link). Include the link in your README.
+Loom, a plain screen recording, an unlisted YouTube link — whatever's easy.
+Drop the link in your README.
 
 ---
 
-## What to send back
+## What to send
 
-- A git repo or zip — **with your commit history**, if you used git.
-- `README.md` — your before/after timings, your Part A changes with reasoning,
-  the Loom link, and what you'd do with another four hours.
-- `DESIGN.md` and `DECISIONS.md`, filled in.
-- Your diagram, committed.
-- Anything you tried that **didn't** work. Genuinely useful, not a trap.
+A repo or a zip, with commit history if you used git. Alongside the code:
 
-### Explicitly not required
+- Your Part A timings and what you changed
+- `DESIGN.md` and `DECISIONS.md`
+- Your diagram
+- The recording link
 
-No AWS deployment. No CI. No dashboard or UI. No Terraform or CDK. No
-exhaustive test coverage. No working code in Part B. If you find yourself
-building any of these, stop — you've left the exercise.
+Anything you tried that didn't work is genuinely interesting to us, if you
+feel like including it.
+
+**Not needed:** AWS deployment, CI, a UI, Terraform or CDK, or test coverage
+beyond whatever you find useful. Part B doesn't need working code.
 
 ---
 
 ## Layout
 
 ```
-jobs/daily_rollup.py       Part A -- the slow job (edit this)
-DESIGN.md                  Part B -- the brief and your write-up
-DECISIONS.md               Part B -- your six decisions
+jobs/daily_rollup.py       Part A — the slow job
+DESIGN.md                  Part B — the brief and your write-up
+DECISIONS.md               Part B — your six decisions
 scripts/generate_data.py   synthetic data generator
 scripts/session.py         shared Spark session
-scripts/verify.py          Part A correctness oracle (don't edit)
+scripts/verify.py          Part A output check
 reference/                 expected Part A fingerprint
-tests/                     example tests -- add your own if useful
+tests/                     a couple of example tests
 ```
 
-Questions about the exercise are welcome and won't count against you. Ask.
+Anything unclear, just ask.
